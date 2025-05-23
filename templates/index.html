@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Meta Data de la Base</title>
+</head>
+<body>
+    <h1>Meta Data de la Base de Datos</h1>
+    <table border="1">
+        <tr>
+            <th>Tabla</th>
+            <th>Columna</th>
+            <th>Tipo</th>
+        </tr>
+        {% for row in metadata %}
+        <tr>
+            <td>{{ row[0] }}</td>
+            <td>{{ row[1] }}</td>
+            <td>{{ row[2] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
