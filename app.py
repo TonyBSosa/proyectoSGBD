@@ -8,14 +8,14 @@ def obtener_metadata():
         host='localhost',
         user='root',
         password='',  # Cambia esto si usas contraseña
-        database='nombre_de_tu_base'
+        database='test_sgbd'
     )
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT table_name, column_name, data_type
                 FROM information_schema.columns
-                WHERE table_schema = 'nombre_de_tu_base';
+                WHERE table_schema = 'test_sgbd';
             """)
             return cursor.fetchall()
     finally:
