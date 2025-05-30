@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Meta Data - {{ motor.upper() }}</title>
+</head>
+<body>
+    <h1>Meta Data de la Base de Datos - {{ motor.upper() }}</h1>
+<a href="/">⬅ Volver</a> |
+<a href="/crear-tabla/{{ motor }}">➕ Crear tabla</a> |
+<a href="/crear-relacion/{{ motor }}">🔗 Crear relación</a>
+    <br><br>
+    <table border="1">
+        <tr><th>Tabla</th><th>Columna</th><th>Tipo</th></tr>
+        {% for fila in datos %}
+            <tr>
+                <td>{{ fila[0] }}</td>
+                <td>{{ fila[1] }}</td>
+                <td>{{ fila[2] }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
+
