@@ -1,9 +1,13 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for
 import pyodbc
+import pymysql
 
 app = Flask(__name__, template_folder='webpage')
 
-# Conexión a SQL Server
+# -----------------------
+# Funciones de conexión
+# -----------------------
+
 def conectar_sqlserver():
     return pyodbc.connect(
         'DRIVER={ODBC Driver 17 for SQL Server};'
@@ -12,66 +16,102 @@ def conectar_sqlserver():
         'Trusted_Connection=yes;'
     )
 
-# Tipos válidos para validación básica
-TIPOS_VALIDOS = {'INT', 'VARCHAR', 'TEXT', 'DATE', 'BIT', 'FLOAT', 'DECIMAL'}
+def conectar_mysql():
+    return pymysql.connect(
+        host='localhost',
+        user='root',
+        password='',
+        database='test_sgbd',
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.Cursor
+    )
 
-# Mostrar estructura de la BD
-@app.route('/')
-def metadata():
-    conn = conectar_sqlserver()
+# -----------------------
+# Página principal
+# -----------------------
+
+@app.route('/', methods=['GET', 'POST'])
+def seleccionar_motor():
+    if request.method == 'POST':
+        motor = request.form['motor']
+        return redirect(url_for('ver_metadata', motor=motor))
+    return render_template('seleccionar_motor.html')
+
+# -----------------------
+# Mostrar metadata
+# -----------------------
+
+@app.route('/metadata/<motor>')
+def ver_metadata(motor):
+    if motor == 'sqlserver':
+        conn = conectar_sqlserver()
+        query = """
+        SELECT 
+            t.name AS tabla,
+            c.name AS columna,
+            ty.name AS tipo
+        FROM sys.tables t
+        JOIN sys.columns c ON t.object_id = c.object_id
+        JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+        ORDER BY t.name, c.column_id;
+        """
+    elif motor == 'mysql':
+        conn = conectar_mysql()
+        query = """
+        SELECT 
+            table_name AS tabla,
+            column_name AS columna,
+            data_type AS tipo
+        FROM information_schema.columns
+        WHERE table_schema = 'test_sgbd'
+        ORDER BY table_name, ordinal_position;
+        """
+    else:
+        return "Motor no válido"
+
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT 
-                    t.name AS tabla,
-                    c.name AS columna,
-                    ty.name AS tipo
-                FROM sys.tables t
-                JOIN sys.columns c ON t.object_id = c.object_id
-                JOIN sys.types ty ON c.user_type_id = ty.user_type_id
-                ORDER BY t.name, c.column_id;
-            """)
+            cursor.execute(query)
             datos = cursor.fetchall()
-        html = "<h1>Meta Data de la Base de Datos</h1>"
-        html += "<a href='/crear-tabla'>➕ Crear tabla</a> | <a href='/crear-relacion'>🔗 Crear relación</a><br><br>"
-        html += "<table border='1'><tr><th>Tabla</th><th>Columna</th><th>Tipo</th></tr>"
-        for fila in datos:
-            html += f"<tr><td>{fila[0]}</td><td>{fila[1]}</td><td>{fila[2]}</td></tr>"
-        html += "</table>"
-        return html
     except Exception as e:
-        return f"<h1>Error</h1><p>{e}</p>"
+        return f"<h1>Error al obtener metadata</h1><p>{e}</p>"
     finally:
         conn.close()
 
-# Crear tabla con validación
-@app.route('/crear-tabla', methods=['GET', 'POST'])
-def crear_tabla():
+    return render_template('metadata.html', datos=datos, motor=motor)
+
+# -----------------------
+# Crear tabla
+# -----------------------
+
+TIPOS_VALIDOS = {'INT', 'VARCHAR', 'TEXT', 'DATE', 'BIT', 'FLOAT', 'DECIMAL'}
+
+@app.route('/crear-tabla/<motor>', methods=['GET', 'POST'])
+def crear_tabla(motor):
     mensaje = ''
     if request.method == 'POST':
         nombre_tabla = request.form['nombre_tabla']
         campos = request.form['campos']
 
-        # Validación básica de tipos
         definiciones = campos.split(',')
         errores = []
         for campo in definiciones:
             partes = campo.strip().split()
             if len(partes) < 2:
-                errores.append(f'❌ Definición incompleta: "{campo.strip()}"')
+                errores.append(f'❌ Definición incompleta: \"{campo.strip()}\"')
                 continue
             tipo = partes[1].upper()
             if '(' in tipo:
                 tipo = tipo.split('(')[0]
             if tipo not in TIPOS_VALIDOS:
-                errores.append(f'❌ Tipo inválido: "{tipo}" en "{campo.strip()}"')
+                errores.append(f'❌ Tipo inválido: \"{tipo}\" en \"{campo.strip()}\"')
 
         if errores:
             mensaje = '<br>'.join(errores)
         else:
             query = f"CREATE TABLE {nombre_tabla} ({campos})"
             try:
-                conn = conectar_sqlserver()
+                conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
                 with conn.cursor() as cursor:
                     cursor.execute(query)
                 conn.commit()
@@ -81,11 +121,14 @@ def crear_tabla():
             finally:
                 conn.close()
 
-    return render_template('crear_tabla.html', mensaje=mensaje)
+    return render_template('crear_tabla.html', mensaje=mensaje, motor=motor)
 
-# Crear relación FOREIGN KEY
-@app.route('/crear-relacion', methods=['GET', 'POST'])
-def crear_relacion():
+# -----------------------
+# Crear relación
+# -----------------------
+
+@app.route('/crear-relacion/<motor>', methods=['GET', 'POST'])
+def crear_relacion(motor):
     mensaje = ''
     if request.method == 'POST':
         tabla_origen = request.form['tabla_origen']
@@ -100,17 +143,21 @@ def crear_relacion():
         '''
 
         try:
-            conn = conectar_sqlserver()
+            conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
             with conn.cursor() as cursor:
                 cursor.execute(alter_query)
             conn.commit()
-            mensaje = '✅ Relación (FOREIGN KEY) creada exitosamente'
+            mensaje = '✅ Relación FOREIGN KEY creada exitosamente'
         except Exception as e:
             mensaje = f'❌ Error: {e}'
         finally:
             conn.close()
 
-    return render_template('crear_relacion.html', mensaje=mensaje)
+    return render_template('crear_relacion.html', mensaje=mensaje, motor=motor)
+
+# -----------------------
+# Iniciar servidor
+# -----------------------
 
 if __name__ == '__main__':
     app.run(debug=True)
