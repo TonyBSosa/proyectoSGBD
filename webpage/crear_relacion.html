@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><title>Crear Relación</title></head>
+<body>
+    <h1>Definir Relación entre Tablas (FOREIGN KEY)</h1>
+    <form method="POST">
+        <label>Tabla origen:</label><br>
+        <input type="text" name="tabla_origen" required><br><br>
+
+        <label>Columna origen (clave foránea):</label><br>
+        <input type="text" name="columna_origen" required><br><br>
+
+        <label>Tabla destino:</label><br>
+        <input type="text" name="tabla_destino" required><br><br>
+
+        <label>Columna destino (clave primaria):</label><br>
+        <input type="text" name="columna_destino" required><br><br>
+
+        <input type="submit" value="Crear Relación">
+    </form>
+    <p>{{ mensaje }}</p>
+    <a href="/">⬅ Volver</a>
+</body>
+</html>
