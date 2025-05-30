@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><title>Crear Tabla</title></head>
+<body>
+    <h1>Crear nueva tabla</h1>
+    <form method="POST">
+        <label>Nombre de la tabla:</label><br>
+        <input type="text" name="nombre_tabla" required><br><br>
+        
+        <label>Definición de campos (ej: id INT PRIMARY KEY, nombre VARCHAR(100)):</label><br>
+        <textarea name="campos" rows="4" cols="60" required></textarea><br><br>
+        
+        <input type="submit" value="Crear Tabla">
+    </form>
+    <p>{{ mensaje }}</p>
+    <a href="/">⬅ Volver</a>
+</body>
+</html>
