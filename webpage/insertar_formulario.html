@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Insertar en {{ tabla }}</title>
+</head>
+<body>
+    <h1>Insertar datos en la tabla: {{ tabla }}</h1>
+
+    {% if mensaje %}
+        <p><strong>{{ mensaje }}</strong></p>
+    {% endif %}
+
+    <form method="POST">
+        {% for columna in columnas %}
+            <label for="{{ columna }}">{{ columna }}:</label>
+            <input type="text" name="{{ columna }}" id="{{ columna }}" required><br><br>
+        {% endfor %}
+        <button type="submit">Insertar</button>
+    </form>
+
+    <br>
+    <a href="{{ url_for('seleccionar_tabla_insertar', motor=motor) }}">🔙 Volver a selección de tabla</a>
+</body>
+</html>
