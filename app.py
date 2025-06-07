@@ -4,10 +4,8 @@ import pymysql
 
 app = Flask(__name__, template_folder='webpage')
 
-# -----------------------
-# Funciones de conexión
-# -----------------------
-
+ # Funciones de conexión
+ 
 def conectar_sqlserver():
     return pyodbc.connect(
         'DRIVER={ODBC Driver 17 for SQL Server};'
@@ -26,10 +24,8 @@ def conectar_mysql():
         cursorclass=pymysql.cursors.Cursor
     )
 
-# -----------------------
-# Página principal
-# -----------------------
-
+ # Página principal
+ 
 @app.route('/', methods=['GET', 'POST'])
 def seleccionar_motor():
     if request.method == 'POST':
@@ -37,10 +33,8 @@ def seleccionar_motor():
         return redirect(url_for('ver_metadata', motor=motor))
     return render_template('seleccionar_motor.html')
 
-# -----------------------
-# Mostrar metadata
-# -----------------------
-
+ # Mostrar metadata
+ 
 @app.route('/metadata/<motor>')
 def ver_metadata(motor):
     if motor == 'sqlserver':
@@ -80,10 +74,8 @@ def ver_metadata(motor):
 
     return render_template('metadata.html', datos=datos, motor=motor)
 
-# -----------------------
-# Crear tabla
-# -----------------------
-
+ # Crear tabla
+ 
 TIPOS_VALIDOS = {'INT', 'VARCHAR', 'TEXT', 'DATE', 'BIT', 'FLOAT', 'DECIMAL'}
 
 @app.route('/crear-tabla/<motor>', methods=['GET', 'POST'])
@@ -123,10 +115,8 @@ def crear_tabla(motor):
 
     return render_template('crear_tabla.html', mensaje=mensaje, motor=motor)
 
-# -----------------------
-# Crear relación
-# -----------------------
-
+ # Crear relación
+ 
 @app.route('/crear-relacion/<motor>', methods=['GET', 'POST'])
 def crear_relacion(motor):
     mensaje = ''
@@ -155,9 +145,90 @@ def crear_relacion(motor):
 
     return render_template('crear_relacion.html', mensaje=mensaje, motor=motor)
 
-# -----------------------
-# Iniciar servidor
-# -----------------------
+@app.route('/insertar/<motor>', methods=['GET', 'POST'])
+def seleccionar_tabla_insertar(motor):
+    tablas = []
+
+    try:
+        conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+        cursor = conn.cursor()
+        if motor == 'mysql':
+            cursor.execute("SHOW TABLES")
+            tablas = [fila[0] for fila in cursor.fetchall()]
+        else:
+            cursor.execute("SELECT name FROM sys.tables")
+            tablas = [fila[0] for fila in cursor.fetchall()]
+    except Exception as e:
+        return f"<h1>Error al obtener tablas</h1><p>{e}</p>"
+    finally:
+        conn.close()
+
+    if request.method == 'POST':
+        tabla_seleccionada = request.form['tabla']
+        return redirect(url_for('insertar_datos', motor=motor, tabla=tabla_seleccionada))
+
+    return render_template('seleccionar_tabla.html', tablas=tablas, motor=motor)
+
+
+
+@app.route('/insertar/<motor>/<tabla>', methods=['GET', 'POST'])
+def insertar_datos(motor, tabla):
+    columnas = []
+
+    try:
+        conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+        cursor = conn.cursor()
+        
+        if motor == 'mysql':
+            query = f"""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'test_sgbd' AND table_name = %s
+            """
+            cursor.execute(query, (tabla,))
+        else:
+            query = f"""
+            SELECT c.name 
+            FROM sys.columns c
+            JOIN sys.tables t ON c.object_id = t.object_id
+            WHERE t.name = ?
+            """
+            cursor.execute(query, (tabla,))
+        
+        columnas = [fila[0] for fila in cursor.fetchall()]
+
+    except Exception as e:
+        return f"<h1>Error obteniendo columnas</h1><p>{e}</p>"
+    finally:
+        conn.close()
+
+    if request.method == 'POST':
+        valores = [request.form[col] for col in columnas]
+        campos_str = ', '.join(columnas)
+        placeholders = ', '.join(['%s'] * len(valores)) if motor == 'mysql' else ', '.join(['?'] * len(valores))
+        query_insert = f"INSERT INTO {tabla} ({campos_str}) VALUES ({placeholders})"
+
+        try:
+            conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+            cursor = conn.cursor()
+            cursor.execute(query_insert, valores)
+            conn.commit()
+            mensaje = "✅ Registro insertado correctamente"
+        except Exception as e:
+            mensaje = f"❌ Error al insertar: {e}"
+        finally:
+            conn.close()
+        
+        return render_template('insertar_formulario.html', columnas=columnas, tabla=tabla, motor=motor, mensaje=mensaje)
+
+    return render_template('insertar_formulario.html', columnas=columnas, tabla=tabla, motor=motor)
+
+
+
+ # Iniciar servidor
+ 
+ 
 
 if __name__ == '__main__':
     app.run(debug=True)
+

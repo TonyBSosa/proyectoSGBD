@@ -8,6 +8,8 @@
 <a href="/">⬅ Volver</a> |
 <a href="/crear-tabla/{{ motor }}">➕ Crear tabla</a> |
 <a href="/crear-relacion/{{ motor }}">🔗 Crear relación</a>
+<a href="{{ url_for('seleccionar_tabla_insertar', motor=motor) }}">📝 Insertar registros</a><br>
+
     <br><br>
     <table border="1">
         <tr><th>Tabla</th><th>Columna</th><th>Tipo</th></tr>
