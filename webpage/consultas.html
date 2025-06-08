@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Consultas SQL Amigables</title>
+</head>
+<body>
+    <h1>🔍 Realizar Consulta ({{ motor | upper }})</h1>
+
+    <form method="POST">
+        <label for="accion">Acción SQL:</label>
+        <select name="accion" id="accion">
+            <option value="SELECT">SELECT</option>
+        </select><br><br>
+
+        <label for="tabla">Tabla:</label>
+        <select name="tabla" id="tabla" required onchange="this.form.submit()">
+            <option value="">-- Selecciona una tabla --</option>
+            {% for t in tablas %}
+                <option value="{{ t }}" {% if t == tabla %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select><br><br>
+
+        {% if columnas %}
+            <label for="columnas">Columnas:</label>
+            <select name="columnas" id="columnas" multiple required>
+                {% for col in columnas %}
+                    <option value="{{ col }}" selected>{{ col }}</option>
+                {% endfor %}
+            </select><br><br>
+
+            <label for="condicion">Condición WHERE (opcional):</label>
+            <input type="text" name="condicion" id="condicion" placeholder="ej: edad > 25"><br><br>
+
+            <button type="submit">Ejecutar</button>
+        {% endif %}
+    </form>
+
+    {% if query %}
+        <h3>Consulta ejecutada:</h3>
+        <code>{{ query }}</code>
+    {% endif %}
+
+    {% if resultados %}
+        <h2>📋 Resultados:</h2>
+        <table border="1" cellpadding="5">
+            <thead>
+                <tr>
+                    {% for col in columnas %}
+                        <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for fila in resultados %}
+                    <tr>
+                        {% for valor in fila %}
+                            <td>{{ valor }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% elif resultados is not none %}
+        <p>⚠️ Sin resultados</p>
+    {% endif %}
+
+    <br>
+    <a href="{{ url_for('ver_metadata', motor=motor) }}">🔙 Volver al inicio</a>
+</body>
+</html>

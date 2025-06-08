@@ -9,6 +9,10 @@
 <a href="/crear-tabla/{{ motor }}">➕ Crear tabla</a> |
 <a href="/crear-relacion/{{ motor }}">🔗 Crear relación</a>
 <a href="{{ url_for('seleccionar_tabla_insertar', motor=motor) }}">📝 Insertar registros</a><br>
+<br>
+<a href="{{ url_for('consultas', motor=motor) }}">
+    🧠 Ir a Consultas SQL Amigables
+</a>
 
     <br><br>
     <table border="1">

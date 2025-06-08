@@ -1,25 +1,31 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session
+
 import pyodbc
 import pymysql
 
+ 
 app = Flask(__name__, template_folder='webpage')
+app.secret_key = 'clave-secreta-única'  # ¡Puedes poner cualquier texto aleatorio aquí!
+
 
  # Funciones de conexión
  
 def conectar_sqlserver():
+    base = session.get('base_datos', 'Example DB')  # Usa lo de la sesión
     return pyodbc.connect(
         'DRIVER={ODBC Driver 17 for SQL Server};'
         'SERVER=(localdb)\\VerbTables;'
-        'DATABASE=Example DB;'
+        f'DATABASE={base};'
         'Trusted_Connection=yes;'
     )
 
 def conectar_mysql():
+    base = session.get('base_datos', 'test_sgbd')
     return pymysql.connect(
         host='localhost',
         user='root',
         password='',
-        database='test_sgbd',
+        database=base,
         charset='utf8mb4',
         cursorclass=pymysql.cursors.Cursor
     )
@@ -30,8 +36,20 @@ def conectar_mysql():
 def seleccionar_motor():
     if request.method == 'POST':
         motor = request.form['motor']
+        usar_predeterminada = request.form.get('usar_predeterminada') == 'si'
+
+        if usar_predeterminada:
+            # Asigna base predeterminada según el motor
+            base = 'Example DB' if motor == 'sqlserver' else 'test_sgbd'
+        else:
+            base = request.form['base_datos']
+
+        session['motor'] = motor
+        session['base_datos'] = base
         return redirect(url_for('ver_metadata', motor=motor))
+
     return render_template('seleccionar_motor.html')
+
 
  # Mostrar metadata
  
@@ -170,60 +188,152 @@ def seleccionar_tabla_insertar(motor):
     return render_template('seleccionar_tabla.html', tablas=tablas, motor=motor)
 
 
-
 @app.route('/insertar/<motor>/<tabla>', methods=['GET', 'POST'])
 def insertar_datos(motor, tabla):
     columnas = []
+    registros = []
+    mensaje = ''
 
     try:
         conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
         cursor = conn.cursor()
-        
+
+        # Obtener nombres de columnas
         if motor == 'mysql':
-            query = f"""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = 'test_sgbd' AND table_name = %s
-            """
-            cursor.execute(query, (tabla,))
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'test_sgbd' AND table_name = %s
+            """, (tabla,))
         else:
-            query = f"""
-            SELECT c.name 
-            FROM sys.columns c
-            JOIN sys.tables t ON c.object_id = t.object_id
-            WHERE t.name = ?
-            """
-            cursor.execute(query, (tabla,))
+            cursor.execute("""
+                SELECT c.name 
+                FROM sys.columns c
+                JOIN sys.tables t ON c.object_id = t.object_id
+                WHERE t.name = ?
+            """, (tabla,))
         
         columnas = [fila[0] for fila in cursor.fetchall()]
 
-    except Exception as e:
-        return f"<h1>Error obteniendo columnas</h1><p>{e}</p>"
-    finally:
-        conn.close()
-
-    if request.method == 'POST':
-        valores = [request.form[col] for col in columnas]
-        campos_str = ', '.join(columnas)
-        placeholders = ', '.join(['%s'] * len(valores)) if motor == 'mysql' else ', '.join(['?'] * len(valores))
-        query_insert = f"INSERT INTO {tabla} ({campos_str}) VALUES ({placeholders})"
-
-        try:
-            conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
-            cursor = conn.cursor()
+        # Insertar datos si se envió el formulario
+        if request.method == 'POST':
+            valores = [request.form[col] for col in columnas]
+            campos_str = ', '.join(columnas)
+            placeholders = ', '.join(['%s'] * len(valores)) if motor == 'mysql' else ', '.join(['?'] * len(valores))
+            query_insert = f"INSERT INTO {tabla} ({campos_str}) VALUES ({placeholders})"
             cursor.execute(query_insert, valores)
             conn.commit()
             mensaje = "✅ Registro insertado correctamente"
-        except Exception as e:
-            mensaje = f"❌ Error al insertar: {e}"
-        finally:
-            conn.close()
-        
-        return render_template('insertar_formulario.html', columnas=columnas, tabla=tabla, motor=motor, mensaje=mensaje)
 
-    return render_template('insertar_formulario.html', columnas=columnas, tabla=tabla, motor=motor)
+        # Obtener todos los registros de la tabla
+        cursor.execute(f"SELECT * FROM {tabla}")
+        registros = cursor.fetchall()
+
+    except Exception as e:
+        mensaje = f"❌ Error: {e}"
+    finally:
+        conn.close()
+
+    return render_template('insertar_formulario.html', columnas=columnas, tabla=tabla, motor=motor, mensaje=mensaje, registros=registros)
 
 
+
+
+from flask import jsonify
+ 
+
+@app.route('/actualizar-celda', methods=['POST'])
+def actualizar_celda():
+    motor = request.form['motor']
+    tabla = request.form['tabla']
+    columna = request.form['columna']
+    id_columna = request.form['id_columna']
+    id_valor = request.form['id_valor']
+    valor = request.form['valor']
+
+    try:
+        conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+        cursor = conn.cursor()
+
+        query = f"UPDATE {tabla} SET {columna} = %s WHERE {id_columna} = %s" if motor == 'mysql' \
+                else f"UPDATE {tabla} SET {columna} = ? WHERE {id_columna} = ?"
+
+        cursor.execute(query, (valor, id_valor))
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+    finally:
+        conn.close()
+
+
+@app.route('/consultas/<motor>', methods=['GET', 'POST'])
+def consultas(motor):
+    conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+    cursor = conn.cursor()
+
+    tablas = []
+    columnas = []
+    resultados = None
+    query = ''
+    tabla = None
+
+    try:
+        if motor == 'mysql':
+            cursor.execute("SHOW TABLES")
+            tablas = [fila[0] for fila in cursor.fetchall()]
+        else:
+            cursor.execute("SELECT name FROM sys.tables")
+            tablas = [fila[0] for fila in cursor.fetchall()]
+    except Exception as e:
+        return f"<h1>Error obteniendo tablas</h1><p>{e}</p>"
+
+    if request.method == 'POST':
+        tabla = request.form.get('tabla')
+        columnas_seleccionadas = request.form.getlist('columnas')
+        condicion = request.form.get('condicion', '')
+
+        if tabla and columnas_seleccionadas:
+            columnas_str = ', '.join(columnas_seleccionadas)
+            query = f"SELECT {columnas_str} FROM {tabla}"
+            if condicion:
+                query += f" WHERE {condicion}"
+
+            try:
+                cursor.execute(query)
+                resultados = cursor.fetchall()
+            except Exception as e:
+                resultados = []
+                query = f"❌ Error ejecutando la consulta: {e}"
+
+    # Si se seleccionó tabla, obtener sus columnas
+    if request.method == 'POST' or request.args.get('tabla'):
+        tabla = tabla or request.args.get('tabla')
+        if tabla:
+            try:
+                if motor == 'mysql':
+                    cursor.execute(f"SHOW COLUMNS FROM {tabla}")
+                    columnas = [fila[0] for fila in cursor.fetchall()]
+                else:
+                    cursor.execute(f"""
+                    SELECT c.name 
+                    FROM sys.columns c
+                    JOIN sys.tables t ON c.object_id = t.object_id
+                    WHERE t.name = ?
+                    """, (tabla,))
+                    columnas = [fila[0] for fila in cursor.fetchall()]
+            except Exception as e:
+                return f"<h1>Error obteniendo columnas</h1><p>{e}</p>"
+
+    conn.close()
+
+    return render_template('consultas.html',
+                           motor=motor,
+                           tablas=tablas,
+                           columnas=columnas,
+                           resultados=resultados,
+                           query=query,
+                           tabla=tabla)
 
  # Iniciar servidor
  
