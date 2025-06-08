@@ -1,25 +1,31 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session
+
 import pyodbc
 import pymysql
 
+ 
 app = Flask(__name__, template_folder='webpage')
+app.secret_key = 'clave-secreta-única'  # ¡Puedes poner cualquier texto aleatorio aquí!
+
 
  # Funciones de conexión
  
 def conectar_sqlserver():
+    base = session.get('base_datos', 'Example DB')  # Usa lo de la sesión
     return pyodbc.connect(
         'DRIVER={ODBC Driver 17 for SQL Server};'
         'SERVER=(localdb)\\VerbTables;'
-        'DATABASE=Example DB;'
+        f'DATABASE={base};'
         'Trusted_Connection=yes;'
     )
 
 def conectar_mysql():
+    base = session.get('base_datos', 'test_sgbd')
     return pymysql.connect(
         host='localhost',
         user='root',
         password='',
-        database='test_sgbd',
+        database=base,
         charset='utf8mb4',
         cursorclass=pymysql.cursors.Cursor
     )
@@ -30,8 +36,20 @@ def conectar_mysql():
 def seleccionar_motor():
     if request.method == 'POST':
         motor = request.form['motor']
+        usar_predeterminada = request.form.get('usar_predeterminada') == 'si'
+
+        if usar_predeterminada:
+            # Asigna base predeterminada según el motor
+            base = 'Example DB' if motor == 'sqlserver' else 'test_sgbd'
+        else:
+            base = request.form['base_datos']
+
+        session['motor'] = motor
+        session['base_datos'] = base
         return redirect(url_for('ver_metadata', motor=motor))
+
     return render_template('seleccionar_motor.html')
+
 
  # Mostrar metadata
  

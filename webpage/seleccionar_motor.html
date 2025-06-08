@@ -1,14 +1,23 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Seleccionar Motor</title>
-</head>
-<body>
-    <h1>Selecciona el Motor de Base de Datos</h1>
-    <form method="POST">
-        <label><input type="radio" name="motor" value="sqlserver" required> SQL Server</label><br>
-        <label><input type="radio" name="motor" value="mysql"> MySQL</label><br><br>
-        <input type="submit" value="Ver Meta Data">
-    </form>
-</body>
-</html>
+<h2>Selecciona el Motor de Base de Datos</h2>
+<form method="POST">
+    <label>
+        <input type="radio" name="motor" value="sqlserver" required> SQL Server
+    </label>
+    <label>
+        <input type="radio" name="motor" value="mysql"> MySQL
+    </label>
+    <br><br>
+
+    <label>¿Usar base de datos predeterminada?</label>
+    <select name="usar_predeterminada">
+        <option value="si">Sí</option>
+        <option value="no">No, cambiar</option>
+    </select>
+    <br><br>
+
+    <label for="base_datos">Nombre de la base de datos:</label>
+    <input type="text" name="base_datos" placeholder="Escribe el nombre exacto">
+    <br><br>
+
+    <button type="submit">Continuar</button>
+</form>
