@@ -249,6 +249,73 @@ def actualizar_celda():
         conn.close()
 
 
+@app.route('/consultas/<motor>', methods=['GET', 'POST'])
+def consultas(motor):
+    conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+    cursor = conn.cursor()
+
+    tablas = []
+    columnas = []
+    resultados = None
+    query = ''
+    tabla = None
+
+    try:
+        if motor == 'mysql':
+            cursor.execute("SHOW TABLES")
+            tablas = [fila[0] for fila in cursor.fetchall()]
+        else:
+            cursor.execute("SELECT name FROM sys.tables")
+            tablas = [fila[0] for fila in cursor.fetchall()]
+    except Exception as e:
+        return f"<h1>Error obteniendo tablas</h1><p>{e}</p>"
+
+    if request.method == 'POST':
+        tabla = request.form.get('tabla')
+        columnas_seleccionadas = request.form.getlist('columnas')
+        condicion = request.form.get('condicion', '')
+
+        if tabla and columnas_seleccionadas:
+            columnas_str = ', '.join(columnas_seleccionadas)
+            query = f"SELECT {columnas_str} FROM {tabla}"
+            if condicion:
+                query += f" WHERE {condicion}"
+
+            try:
+                cursor.execute(query)
+                resultados = cursor.fetchall()
+            except Exception as e:
+                resultados = []
+                query = f"❌ Error ejecutando la consulta: {e}"
+
+    # Si se seleccionó tabla, obtener sus columnas
+    if request.method == 'POST' or request.args.get('tabla'):
+        tabla = tabla or request.args.get('tabla')
+        if tabla:
+            try:
+                if motor == 'mysql':
+                    cursor.execute(f"SHOW COLUMNS FROM {tabla}")
+                    columnas = [fila[0] for fila in cursor.fetchall()]
+                else:
+                    cursor.execute(f"""
+                    SELECT c.name 
+                    FROM sys.columns c
+                    JOIN sys.tables t ON c.object_id = t.object_id
+                    WHERE t.name = ?
+                    """, (tabla,))
+                    columnas = [fila[0] for fila in cursor.fetchall()]
+            except Exception as e:
+                return f"<h1>Error obteniendo columnas</h1><p>{e}</p>"
+
+    conn.close()
+
+    return render_template('consultas.html',
+                           motor=motor,
+                           tablas=tablas,
+                           columnas=columnas,
+                           resultados=resultados,
+                           query=query,
+                           tabla=tabla)
 
  # Iniciar servidor
  
