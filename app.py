@@ -1,17 +1,16 @@
-from flask import Flask, render_template, request, redirect, url_for, session
-
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import pyodbc
 import pymysql
 
  
 app = Flask(__name__, template_folder='webpage')
-app.secret_key = 'clave-secreta-única'  # ¡Puedes poner cualquier texto aleatorio aquí!
+app.secret_key = '123456' 
 
 
  # Funciones de conexión
  
 def conectar_sqlserver():
-    base = session.get('base_datos', 'Example DB')  # Usa lo de la sesión
+    base = session.get('base_datos')  # default db
     return pyodbc.connect(
         'DRIVER={ODBC Driver 17 for SQL Server};'
         'SERVER=(localdb)\\VerbTables;'
@@ -20,7 +19,7 @@ def conectar_sqlserver():
     )
 
 def conectar_mysql():
-    base = session.get('base_datos', 'test_sgbd')
+    base = session.get('base_datos')
     return pymysql.connect(
         host='localhost',
         user='root',
@@ -30,25 +29,68 @@ def conectar_mysql():
         cursorclass=pymysql.cursors.Cursor
     )
 
- # Página principal
- 
+#seleccion de motor 
 @app.route('/', methods=['GET', 'POST'])
 def seleccionar_motor():
+    mensaje = ''
     if request.method == 'POST':
         motor = request.form['motor']
-        usar_predeterminada = request.form.get('usar_predeterminada') == 'si'
+        accion = request.form['accion']
 
-        if usar_predeterminada:
-            # Asigna base predeterminada según el motor
-            base = 'Example DB' if motor == 'sqlserver' else 'test_sgbd'
+        if accion == 'predeterminada':
+            base = 'Example DB' if motor == 'sqlserver' else 'test_sgbd' or 'base_datos'
+
+        elif accion == 'existente':
+            base = request.form.get('base_existente', '').strip()
+            if not base:
+                mensaje = "⚠️ Debes ingresar el nombre de una base existente."
+                return render_template('seleccionar_motor.html', mensaje=mensaje)
+
+        elif accion == 'crear':
+            base = request.form.get('base_nueva', '').strip()
+            if not base:
+                mensaje = "⚠️ Debes ingresar un nombre para la nueva base."
+                return render_template('seleccionar_motor.html', mensaje=mensaje)
+
+            try:
+                if motor == 'mysql':
+                    conn = pymysql.connect(
+                        host='localhost',
+                        user='root',
+                        password='',
+                        charset='utf8mb4',
+                        cursorclass=pymysql.cursors.Cursor
+                    )
+                    with conn.cursor() as cursor:
+                        cursor.execute(f"CREATE DATABASE `{base}`")
+                    conn.commit()
+                else:
+                    conn = pyodbc.connect(
+    'DRIVER={ODBC Driver 17 for SQL Server};'
+    'SERVER=(localdb)\\VerbTables;'
+    'DATABASE=master;'
+    'Trusted_Connection=yes;',
+    autocommit=True  # Activa autocommit explícitamente
+)
+
+                    with conn.cursor() as cursor:
+                        cursor.execute(f"CREATE DATABASE [{base}]")
+                    conn.commit()
+            except Exception as e:
+                mensaje = f"❌ Error creando la base: {e}"
+                return render_template('seleccionar_motor.html', mensaje=mensaje)
+            finally:
+                conn.close()
         else:
-            base = request.form['base_datos']
+            mensaje = "⚠️ Opción inválida."
+            return render_template('seleccionar_motor.html', mensaje=mensaje)
 
+        # Guardar en la sesión y continuar
         session['motor'] = motor
         session['base_datos'] = base
         return redirect(url_for('ver_metadata', motor=motor))
 
-    return render_template('seleccionar_motor.html')
+    return render_template('seleccionar_motor.html', mensaje=mensaje)
 
 
  # Mostrar metadata
@@ -68,14 +110,15 @@ def ver_metadata(motor):
         ORDER BY t.name, c.column_id;
         """
     elif motor == 'mysql':
+        base_actual = session.get('base_datos', 'test_sgbd')
         conn = conectar_mysql()
-        query = """
+        query = f"""
         SELECT 
             table_name AS tabla,
             column_name AS columna,
             data_type AS tipo
         FROM information_schema.columns
-        WHERE table_schema = 'test_sgbd'
+        WHERE table_schema = '{base_actual}'
         ORDER BY table_name, ordinal_position;
         """
     else:
@@ -95,73 +138,136 @@ def ver_metadata(motor):
  # Crear tabla
  
 TIPOS_VALIDOS = {'INT', 'VARCHAR', 'TEXT', 'DATE', 'BIT', 'FLOAT', 'DECIMAL'}
-
 @app.route('/crear-tabla/<motor>', methods=['GET', 'POST'])
 def crear_tabla(motor):
     mensaje = ''
     if request.method == 'POST':
         nombre_tabla = request.form['nombre_tabla']
-        campos = request.form['campos']
+        campos_sql = []
+        i = 0
+        while True:
+            nombre_campo = request.form.get(f'nombre_campo_{i}')
+            tipo_campo = request.form.get(f'tipo_campo_{i}')
+            if not nombre_campo or not tipo_campo:
+                break
 
-        definiciones = campos.split(',')
-        errores = []
-        for campo in definiciones:
-            partes = campo.strip().split()
-            if len(partes) < 2:
-                errores.append(f'❌ Definición incompleta: \"{campo.strip()}\"')
-                continue
-            tipo = partes[1].upper()
-            if '(' in tipo:
-                tipo = tipo.split('(')[0]
-            if tipo not in TIPOS_VALIDOS:
-                errores.append(f'❌ Tipo inválido: \"{tipo}\" en \"{campo.strip()}\"')
+            es_pk = f'pk_{i}' in request.form
+            campo_def = f"{nombre_campo} {tipo_campo}"
+            if es_pk:
+                campo_def += " PRIMARY KEY"
+            campos_sql.append(campo_def)
+            i += 1
 
-        if errores:
-            mensaje = '<br>'.join(errores)
+        if not campos_sql:
+            mensaje = "❌ Debes agregar al menos un campo."
         else:
-            query = f"CREATE TABLE {nombre_tabla} ({campos})"
+            query = f"CREATE TABLE {nombre_tabla} ({', '.join(campos_sql)})"
             try:
                 conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
                 with conn.cursor() as cursor:
                     cursor.execute(query)
                 conn.commit()
-                mensaje = '✅ Tabla creada exitosamente'
+                return redirect(url_for('ver_metadata', motor=motor))
             except Exception as e:
-                mensaje = f'❌ Error SQL: {e}'
+                mensaje = f"❌ Error al crear tabla: {e}"
             finally:
                 conn.close()
 
     return render_template('crear_tabla.html', mensaje=mensaje, motor=motor)
 
  # Crear relación
- 
 @app.route('/crear-relacion/<motor>', methods=['GET', 'POST'])
 def crear_relacion(motor):
-    mensaje = ''
+    conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+    cursor = conn.cursor()
+
+    # Obtener todas las tablas para el formulario
+    if motor == 'mysql':
+        cursor.execute("SHOW TABLES")
+        tablas = [fila[0] for fila in cursor.fetchall()]
+    else:
+        cursor.execute("SELECT name FROM sys.tables")
+        tablas = [fila[0] for fila in cursor.fetchall()]
+
+    mensaje = None
+
     if request.method == 'POST':
-        tabla_origen = request.form['tabla_origen']
-        columna_origen = request.form['columna_origen']
-        tabla_destino = request.form['tabla_destino']
-        columna_destino = request.form['columna_destino']
+        tabla_pk = request.form.get('tabla_pk')
+        campo_pk = request.form.get('campo_pk')
+        tabla_fk = request.form.get('tabla_fk')
+        campo_fk = request.form.get('campo_fk')
+        on_update = 'CASCADE' if request.form.get('on_update') else 'NO ACTION'
+        on_delete = 'CASCADE' if request.form.get('on_delete') else 'NO ACTION'
 
-        alter_query = f'''
-        ALTER TABLE {tabla_origen}
-        ADD CONSTRAINT fk_{tabla_origen}_{columna_origen}
-        FOREIGN KEY ({columna_origen}) REFERENCES {tabla_destino}({columna_destino})
-        '''
+        print("POST recibido")
+        print("tabla_pk:", tabla_pk)
+        print("campo_pk:", campo_pk)
+        print("tabla_fk:", tabla_fk)
+        print("campo_fk:", campo_fk)
 
-        try:
-            conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
-            with conn.cursor() as cursor:
-                cursor.execute(alter_query)
-            conn.commit()
-            mensaje = '✅ Relación FOREIGN KEY creada exitosamente'
-        except Exception as e:
-            mensaje = f'❌ Error: {e}'
-        finally:
-            conn.close()
+        if not all([tabla_pk, campo_pk, tabla_fk, campo_fk]):
+            mensaje = "❌ Faltan datos necesarios para crear la relación"
+        else:
+            try:
+                # Verificar tipos de datos
+                if motor == 'mysql':
+                    cursor.execute("""
+                        SELECT data_type 
+                        FROM information_schema.columns
+                        WHERE table_schema = DATABASE()
+                        AND table_name = %s AND column_name = %s
+                    """, (tabla_pk, campo_pk))
+                    tipo_pk = cursor.fetchone()[0]
 
-    return render_template('crear_relacion.html', mensaje=mensaje, motor=motor)
+                    cursor.execute("""
+                        SELECT data_type 
+                        FROM information_schema.columns
+                        WHERE table_schema = DATABASE()
+                        AND table_name = %s AND column_name = %s
+                    """, (tabla_fk, campo_fk))
+                    tipo_fk = cursor.fetchone()[0]
+                else:  # SQL Server
+                    cursor.execute("""
+                        SELECT ty.name 
+                        FROM sys.columns c
+                        JOIN sys.tables t ON c.object_id = t.object_id
+                        JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+                        WHERE t.name = ? AND c.name = ?
+                    """, (tabla_pk, campo_pk))
+                    tipo_pk = cursor.fetchone()[0]
+
+                    cursor.execute("""
+                        SELECT ty.name 
+                        FROM sys.columns c
+                        JOIN sys.tables t ON c.object_id = t.object_id
+                        JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+                        WHERE t.name = ? AND c.name = ?
+                    """, (tabla_fk, campo_fk))
+                    tipo_fk = cursor.fetchone()[0]
+
+                if tipo_pk != tipo_fk:
+                    mensaje = f"❌ Tipos de datos no coinciden: {tipo_pk} ≠ {tipo_fk}"
+                else:
+                    # Crear relación
+                    alter_sql = f"""
+                        ALTER TABLE {tabla_fk}
+                        ADD CONSTRAINT fk_{tabla_fk}_{campo_fk}
+                        FOREIGN KEY ({campo_fk}) 
+                        REFERENCES {tabla_pk}({campo_pk})
+                        ON UPDATE {on_update}
+                        ON DELETE {on_delete}
+                    """
+                    cursor.execute(alter_sql)
+                    conn.commit()
+                    mensaje = "✅ Relación creada exitosamente"
+            except Exception as e:
+                mensaje = f"❌ Error creando la relación: {e}"
+            finally:
+                conn.close()
+
+    return render_template("crear_relacion.html", tablas=tablas, motor=motor, mensaje=mensaje)
+
+
 
 @app.route('/insertar/<motor>', methods=['GET', 'POST'])
 def seleccionar_tabla_insertar(motor):
@@ -193,6 +299,7 @@ def insertar_datos(motor, tabla):
     columnas = []
     registros = []
     mensaje = ''
+    base = session.get('base_datos', 'test_sgbd')  # nombre por defecto si no hay sesión
 
     try:
         conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
@@ -203,8 +310,8 @@ def insertar_datos(motor, tabla):
             cursor.execute("""
                 SELECT column_name 
                 FROM information_schema.columns 
-                WHERE table_schema = 'test_sgbd' AND table_name = %s
-            """, (tabla,))
+                WHERE table_schema = %s AND table_name = %s
+            """, (base, tabla))
         else:
             cursor.execute("""
                 SELECT c.name 
@@ -225,12 +332,15 @@ def insertar_datos(motor, tabla):
             conn.commit()
             mensaje = "✅ Registro insertado correctamente"
 
-        # Obtener todos los registros de la tabla
+        # Obtener todos los registros
         cursor.execute(f"SELECT * FROM {tabla}")
         registros = cursor.fetchall()
 
     except Exception as e:
-        mensaje = f"❌ Error: {e}"
+        if "FOREIGN KEY constraint" in str(e) and "Supervisor" in str(e):
+            mensaje = "❌ El supervisor no existe. Asegúrese de que el ID esté registrado en la tabla Supervisor."
+        else:
+            mensaje = f"❌ Error al insertar registro: {e}"
     finally:
         conn.close()
 
@@ -238,8 +348,6 @@ def insertar_datos(motor, tabla):
 
 
 
-
-from flask import jsonify
  
 
 @app.route('/actualizar-celda', methods=['POST'])
@@ -334,6 +442,94 @@ def consultas(motor):
                            resultados=resultados,
                            query=query,
                            tabla=tabla)
+@app.route('/obtener-columnas')
+def obtener_columnas():
+    motor = request.args.get('motor')
+    tabla = request.args.get('tabla')
+
+    try:
+        conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+        cursor = conn.cursor()
+
+        if motor == 'mysql':
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = %s AND table_schema = %s
+            """, (tabla, session.get('base_datos')))
+        else:
+            cursor.execute("""
+                SELECT c.name 
+                FROM sys.columns c
+                JOIN sys.tables t ON c.object_id = t.object_id
+                WHERE t.name = ?
+            """, (tabla,))
+        
+        columnas = [fila[0] for fila in cursor.fetchall()]
+        return jsonify({'columnas': columnas})
+
+    except Exception as e:
+        return jsonify({'error': str(e)})
+    finally:
+        conn.close()
+
+# Funcion eliminar fila
+@app.route('/eliminar-fila', methods=['POST'])
+def eliminar_fila():
+    motor = request.form['motor']
+    tabla = request.form['tabla']
+    id_columna = request.form['id_columna']
+    id_valor = request.form['id_valor']
+
+    try:
+        conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+        cursor = conn.cursor()
+
+        query = f"DELETE FROM {tabla} WHERE {id_columna} = %s" if motor == 'mysql' \
+                else f"DELETE FROM {tabla} WHERE {id_columna} = ?"
+
+        cursor.execute(query, (id_valor,))
+        conn.commit()
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+    finally:
+        conn.close()
+
+
+from flask import jsonify
+
+#obtener campos
+
+@app.route('/obtener-campos/<tabla>')
+
+def obtener_campos(tabla):
+    motor = request.args.get('motor', 'mysql')  # Por defecto mysql
+    columnas = []
+
+    try:
+        conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+        cursor = conn.cursor()
+        if motor == 'mysql':
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = DATABASE() AND table_name = %s
+            """, (tabla,))
+        else:
+            cursor.execute("""
+                SELECT c.name 
+                FROM sys.columns c
+                JOIN sys.tables t ON c.object_id = t.object_id
+                WHERE t.name = ?
+            """, (tabla,))
+        columnas = [fila[0] for fila in cursor.fetchall()]
+    except Exception as e:
+        return jsonify([])  # Devuelve vacío si hay error
+    finally:
+        conn.close()
+
+    return jsonify(columnas)
 
  # Iniciar servidor
  

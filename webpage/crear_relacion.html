@@ -1,24 +1,98 @@
 <!DOCTYPE html>
-<html>
-<head><title>Crear Relación</title></head>
-<body>
-    <h1>Definir Relación entre Tablas (FOREIGN KEY)</h1>
-    <form method="POST">
-        <label>Tabla origen:</label><br>
-        <input type="text" name="tabla_origen" required><br><br>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Crear Relación</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body class="bg-light">
+<div class="container py-5">
+    <h1 class="mb-4">🔗 Crear Relación entre Tablas</h1>
 
-        <label>Columna origen (clave foránea):</label><br>
-        <input type="text" name="columna_origen" required><br><br>
+    <form method="POST" action="{{ url_for('crear_relacion', motor=motor) }}">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="tabla_principal" class="form-label">Tabla Principal (PRIMARY KEY)</label>
+                <select name="tabla_pk" id="tabla_principal" class="form-select" required>
+                    <option value="">-- Seleccione --</option>
+                    {% for t in tablas %}
+                        <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label for="campo_pk" class="form-label">Campo PRIMARY KEY</label>
+                <select name="campo_pk" id="campo_pk" class="form-select" required>
+                    <option value="">-- Seleccione tabla primero --</option>
+                </select>
+            </div>
+        </div>
 
-        <label>Tabla destino:</label><br>
-        <input type="text" name="tabla_destino" required><br><br>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="tabla_secundaria" class="form-label">Tabla Secundaria (FOREIGN KEY)</label>
+                <select name="tabla_fk" id="tabla_secundaria" class="form-select" required>
+                    <option value="">-- Seleccione --</option>
+                    {% for t in tablas %}
+                        <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label for="campo_fk" class="form-label">Campo FOREIGN KEY</label>
+                <select name="campo_fk" id="campo_fk" class="form-select" required>
+                    <option value="">-- Seleccione tabla primero --</option>
+                </select>
+            </div>
+        </div>
 
-        <label>Columna destino (clave primaria):</label><br>
-        <input type="text" name="columna_destino" required><br><br>
+        <div class="mb-3">
+            <label class="form-label">Opciones:</label><br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="on_delete" value="CASCADE" id="on_delete">
+                <label class="form-check-label" for="on_delete">ON DELETE CASCADE</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="on_update" value="CASCADE" id="on_update">
+                <label class="form-check-label" for="on_update">ON UPDATE CASCADE</label>
+            </div>
+        </div>
 
-        <input type="submit" value="Crear Relación">
+        <button type="submit" class="btn btn-primary">✅ Crear Relación</button>
+                     <a href="{{ url_for('ver_metadata', motor=motor) }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Volver
     </form>
-    <p>{{ mensaje }}</p>
-    <a href="/">⬅ Volver</a>
+</div>
+
+<script>
+$(document).ready(function () {
+    $('#tabla_principal').change(function () {
+        const tabla = $(this).val();
+        if (tabla) {
+            $.get(`/obtener-campos/${tabla}?motor={{ motor }}`, function (data) {
+                let opciones = '<option value="">-- Seleccione --</option>';
+                data.forEach(campo => {
+                    opciones += `<option value="${campo}">${campo}</option>`;
+                });
+                $('#campo_pk').html(opciones);
+            });
+        }
+    });
+
+    $('#tabla_secundaria').change(function () {
+        const tabla = $(this).val();
+        if (tabla) {
+            $.get(`/obtener-campos/${tabla}?motor={{ motor }}`, function (data) {
+                let opciones = '<option value="">-- Seleccione --</option>';
+                data.forEach(campo => {
+                    opciones += `<option value="${campo}">${campo}</option>`;
+                });
+                $('#campo_fk').html(opciones);
+            });
+        }
+    });
+});
+</script>
 </body>
 </html>
