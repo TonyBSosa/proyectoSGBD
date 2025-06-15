@@ -1,59 +1,168 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Insertar en {{ tabla }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-accent: #4361ee;
+            --secondary-accent: #3f37c9;
+            --success-accent: #2a9d8f;
+            --warning-accent: #f4a261;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        
+        .form-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+        }
+        
+        .page-title {
+            color: var(--primary-accent);
+            border-bottom: 2px solid rgba(67, 97, 238, 0.2);
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-top: 2rem;
+        }
+        
+        td[contenteditable="true"] {
+            background-color: rgba(248, 249, 250, 0.5);
+            cursor: text;
+            transition: background-color 0.2s;
+        }
+        
+        td[contenteditable="true"]:focus {
+            outline: 2px solid var(--primary-accent);
+            background-color: rgba(67, 97, 238, 0.05);
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-accent);
+            border-color: var(--primary-accent);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--secondary-accent);
+            border-color: var(--secondary-accent);
+        }
+        
+        .btn-success {
+            background-color: var(--success-accent);
+            border-color: var(--success-accent);
+        }
+        
+        .form-label {
+            font-weight: 500;
+        }
+        
+        .input-highlight {
+            border-left: 3px solid var(--primary-accent);
+        }
+    </style>
 </head>
 <body>
-    <h1>Insertar datos en la tabla: {{ tabla }}</h1>
+    <div class="container py-5">
+        <div class="form-container">
+            <h1 class="page-title">
+                <i class="bi bi-pencil-square"></i> Insertar datos en: <span class="text-primary">{{ tabla }}</span>
+            </h1>
 
-    {% if mensaje %}
-        <p><strong>{{ mensaje }}</strong></p>
-    {% endif %}
+            {% if mensaje %}
+                <div class="alert alert-info alert-dismissible fade show">
+                    <i class="bi bi-info-circle"></i> {{ mensaje }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endif %}
 
-    <form method="POST">
-        {% for columna in columnas %}
-            <label for="{{ columna }}">{{ columna }}:</label>
-            <input type="text" name="{{ columna }}" id="{{ columna }}" required><br><br>
-        {% endfor %}
-        <button type="submit">Insertar</button>
-    </form>
+            <form method="POST" class="mb-4">
+    <div class="row g-3">
+    {% for columna in columnas %}
+    <div class="col-md-6">
+        <label class="form-label" for="{{ columna }}">
+            <i class="bi bi-columns-gap"></i> {{ columna }}
+        </label>
+        <input class="form-control input-highlight" type="text" 
+               name="{{ columna }}" id="{{ columna }}"
+               {% if columna in campos_requeridos %} required {% endif %}>
+    </div>
+    {% endfor %}
+</div>
+                
+                <div class="mt-4">
+                    <button class="btn btn-success" type="submit">
+                        <i class="bi bi-save"></i> Insertar Registro
+                    </button>
+                    <a class="btn btn-outline-secondary ms-2" 
+                       href="{{ url_for('seleccionar_tabla_insertar', motor=motor) }}">
+                        <i class="bi bi-arrow-left"></i> Volver
+                    </a>
+                </div>
+            </form>
+        </div>
 
-    <br>
-    <a href="{{ url_for('seleccionar_tabla_insertar', motor=motor) }}">🔙 Volver a selección de tabla</a>
+        {% if registros %}
+        <div class="table-container">
+            <h2 class="h4 fw-semibold mb-3 px-3 pt-3">
+                <i class="bi bi-table"></i> Registros existentes en <strong>{{ tabla }}</strong>
+            </h2>
+            
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="tabla-registros">
+                    <thead class="table-light">
+                        <tr>
+                            {% for col in columnas %}
+                                <th><i class="bi bi-tag"></i> {{ col }}</th>
+                            {% endfor %}
+                            <th>❌</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fila in registros %}
+                            <tr>
+                                {% for i in range(columnas|length) %}
+                                    <td contenteditable="true"
+                                        data-columna="{{ columnas[i] }}"
+                                        data-idcolumna="{{ columnas[0] }}"
+                                        data-idvalor="{{ fila[0] }}"
+                                        onblur="guardarCambio(this)"
+                                        onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
+                                        {{ fila[i] }}
+                                    </td>
+                                {% endfor %}
+                                <td>
+                                    <button class="btn btn-sm btn-danger" onclick="eliminarFila('{{ motor }}', '{{ tabla }}', '{{ columnas[0] }}', '{{ fila[0] }}')">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
 
-    {% if registros %}
-        <h2>📄 Registros actuales en la tabla "{{ tabla }}":</h2>
-        <table border="1" cellpadding="5">
-            <thead>
-                <tr>
-                    {% for col in columnas %}
-                        <th>{{ col }}</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for fila in registros %}
-                    <tr>
-                     {% for i in range(fila|length) %}
-    <td contenteditable="true"
-        data-columna="{{ columnas[i] }}"
-        data-idcolumna="{{ columnas[0] }}"
-        data-idvalor="{{ fila[0] }}"
-        onblur="guardarCambio(this)"
-        onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
-        {{ fila[i] }}
-    </td>
-{% endfor %}
-
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% endif %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-    function guardarCambio(td) {
+    async function guardarCambio(td) {
         const motor = "{{ motor }}";
         const tabla = "{{ tabla }}";
         const columna = td.dataset.columna;
@@ -61,17 +170,50 @@
         const id_valor = td.dataset.idvalor;
         const valor = td.innerText;
 
-        fetch("/actualizar-celda", {
+        td.style.backgroundColor = "rgba(244, 162, 97, 0.1)";
+
+        try {
+            const response = await fetch("/actualizar-celda", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: `motor=${motor}&tabla=${tabla}&columna=${columna}&id_columna=${id_columna}&id_valor=${id_valor}&valor=${encodeURIComponent(valor)}`
+            });
+
+            const data = await response.json();
+
+            if (data.status !== 'success') {
+                alert("Error al actualizar: " + data.message);
+                td.style.backgroundColor = "rgba(230, 57, 70, 0.1)";
+            } else {
+                td.style.backgroundColor = "rgba(42, 157, 143, 0.1)";
+                setTimeout(() => {
+                    td.style.backgroundColor = "";
+                }, 1000);
+            }
+        } catch (error) {
+            alert("Error de conexión: " + error.message);
+            td.style.backgroundColor = "rgba(230, 57, 70, 0.1)";
+        }
+    }
+
+    function eliminarFila(motor, tabla, id_columna, id_valor) {
+        if (!confirm("¿Estás seguro de eliminar esta fila?")) return;
+
+        fetch("/eliminar-fila", {
             method: "POST",
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded"
             },
-            body: `motor=${motor}&tabla=${tabla}&columna=${columna}&id_columna=${id_columna}&id_valor=${id_valor}&valor=${encodeURIComponent(valor)}`
+            body: `motor=${motor}&tabla=${tabla}&id_columna=${id_columna}&id_valor=${id_valor}`
         })
         .then(res => res.json())
         .then(data => {
-            if (data.status !== 'success') {
-                alert("❌ Error al actualizar: " + data.message);
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert("❌ Error al eliminar: " + data.message);
             }
         });
     }

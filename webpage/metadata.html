@@ -1,30 +1,125 @@
-<!DOCTYPE html>
-<html>
+ <!DOCTYPE html>
+<html lang="es">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meta Data - {{ motor.upper() }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-accent: #4361ee;
+            --secondary-accent: #3f37c9;
+            --success-accent: #2a9d8f;
+        }
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        .card {
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: none;
+        }
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 2rem;
+        }
+        .btn-primary {
+            background-color: var(--primary-accent);
+            border-color: var(--primary-accent);
+        }
+        .btn-primary:hover {
+            background-color: var(--secondary-accent);
+            border-color: var(--secondary-accent);
+        }
+        .header-gradient {
+            background: linear-gradient(135deg, var(--primary-accent) 0%, var(--secondary-accent) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(67, 97, 238, 0.05);
+        }
+        .table-title {
+            color: var(--success-accent);
+            border-bottom: 2px solid rgba(42, 157, 143, 0.2);
+            padding-bottom: 0.5rem;
+        }
+    </style>
 </head>
 <body>
-    <h1>Meta Data de la Base de Datos - {{ motor.upper() }}</h1>
-<a href="/">⬅ Volver</a> |
-<a href="/crear-tabla/{{ motor }}">➕ Crear tabla</a> |
-<a href="/crear-relacion/{{ motor }}">🔗 Crear relación</a>
-<a href="{{ url_for('seleccionar_tabla_insertar', motor=motor) }}">📝 Insertar registros</a><br>
-<br>
-<a href="{{ url_for('consultas', motor=motor) }}">
-    🧠 Ir a Consultas SQL Amigables
-</a>
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="header-gradient fw-bold mb-2">
+                <i class="bi bi-database"></i> Meta Data - {{ motor.upper() }}
+            </h1>
+            <p class="text-muted mb-0">
+                <i class="bi bi-folder2-open"></i> Base de datos activa: 
+                <span class="badge bg-primary bg-opacity-10 text-primary">{{ base_datos }}</span>
+            </p>
+        </div>
+        <a href="/" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
 
-    <br><br>
-    <table border="1">
-        <tr><th>Tabla</th><th>Columna</th><th>Tipo</th></tr>
-        {% for fila in datos %}
-            <tr>
-                <td>{{ fila[0] }}</td>
-                <td>{{ fila[1] }}</td>
-                <td>{{ fila[2] }}</td>
-            </tr>
-        {% endfor %}
-    </table>
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-primary" href="/crear-tabla/{{ motor }}">
+                    <i class="bi bi-plus-lg"></i> Crear Tabla
+                </a>
+                <a class="btn btn-outline-primary" href="/crear-relacion/{{ motor }}">
+                    <i class="bi bi-link-45deg"></i> Crear Relación
+                </a>
+                <a class="btn btn-outline-success" href="{{ url_for('seleccionar_tabla_insertar', motor=motor) }}">
+                    <i class="bi bi-pencil-square"></i> Insertar Registros
+                </a>
+                <a class="btn btn-outline-info" href="{{ url_for('consultas', motor=motor) }}">
+                    <i class="bi bi-search"></i> Consultas SQL
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% set tabla_agrupada = {} %}
+    {% for fila in datos %}
+        {% set _ = tabla_agrupada.setdefault(fila[0], []).append(fila[1:]) %}
+    {% endfor %}
+
+    {% for tabla, columnas in tabla_agrupada.items() %}
+        <div class="mb-4">
+            <h4 class="table-title fw-semibold mb-3">
+                <i class="bi bi-table"></i> Tabla: {{ tabla }}
+            </h4>
+            <div class="table-container" style="max-width: 60%;">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th><i class="bi bi-columns-gap"></i> Columna</th>
+                            <th><i class="bi bi-type"></i> Tipo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for columna, tipo in columnas %}
+                            <tr>
+                                <td>{{ columna }}</td>
+                                <td><span class="badge bg-secondary bg-opacity-10 text-secondary">{{ tipo }}</span></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-
