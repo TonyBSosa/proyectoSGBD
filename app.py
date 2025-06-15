@@ -489,71 +489,69 @@ def obtener_campos(tabla):
 #consultas
 @app.route('/consultas/<motor>', methods=['GET', 'POST'])
 def consultas(motor):
-    consulta = ''
-    columnas = []
-    resultados = []
-    mensaje = ''
+    conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
+    cursor = conn.cursor()
+
     tablas = []
     vistas = []
     funciones = []
-    base = session.get('base_datos', 'test_sgbd')
+    resultados = []
+    columnas = []
+    mensaje = ''
+    consulta = ''
 
     try:
-        conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
-        cursor = conn.cursor()
-
         # Obtener tablas
         if motor == 'mysql':
-            cursor.execute("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")
+            cursor.execute("SHOW TABLES")
             tablas = [fila[0] for fila in cursor.fetchall()]
-
-            cursor.execute("SHOW FULL TABLES WHERE Table_type = 'VIEW'")
-            vistas = [fila[0] for fila in cursor.fetchall()]
-
-            cursor.execute("SHOW FUNCTION STATUS WHERE Db = %s", (base,))
-            funciones = [fila[1] for fila in cursor.fetchall()]
-
         else:
             cursor.execute("SELECT name FROM sys.tables")
             tablas = [fila[0] for fila in cursor.fetchall()]
 
+        # Obtener vistas
+        if motor == 'mysql':
+            cursor.execute("SHOW FULL TABLES WHERE Table_type = 'VIEW'")
+            vistas = [fila[0] for fila in cursor.fetchall()]
+        else:
             cursor.execute("SELECT name FROM sys.views")
             vistas = [fila[0] for fila in cursor.fetchall()]
 
-            cursor.execute("SELECT name FROM sys.objects WHERE type IN ('FN', 'IF', 'TF')")
-            funciones = [fila[0] for fila in cursor.fetchall()]
+        # Obtener funciones escalares (sin parámetros visibles)
+        if motor == 'mysql':
+            cursor.execute("SELECT routine_name FROM information_schema.routines WHERE routine_type='FUNCTION' AND routine_schema=DATABASE()")
+            funciones = [f"{fila[0]}()" for fila in cursor.fetchall()]
+        else:
+            cursor.execute("SELECT name FROM sys.objects WHERE type = 'FN'")
+            funciones = [f"{fila[0]}()" for fila in cursor.fetchall()]
 
-        # Ejecutar consulta si se envió o si se seleccionó una tabla/view desde GET
+        # Si viene una consulta por POST
         if request.method == 'POST':
             consulta = request.form.get('consulta', '').strip()
-        elif request.args.get('ver'):
-            consulta = f"SELECT * FROM [{request.args.get('ver')}]"
 
-        if consulta:
-            try:
-                cursor.execute(consulta)
-                if cursor.description:
-                    columnas = [desc[0] for desc in cursor.description]
-                    resultados = cursor.fetchall()
-                    mensaje = "✅ Consulta ejecutada correctamente."
-                else:
-                    conn.commit()
-                    mensaje = "✅ Consulta ejecutada correctamente (sin resultados)."
-            except Exception as e:
-                mensaje = f"❌ Error: {e}"
-
+            if consulta:
+                try:
+                    cursor.execute(consulta)
+                    if cursor.description:
+                        columnas = [col[0] for col in cursor.description]
+                        resultados = cursor.fetchall()
+                    mensaje = "✅ Consulta ejecutada correctamente"
+                except Exception as e:
+                    mensaje = f"❌ Error: {e}"
     finally:
         conn.close()
 
-    return render_template("consultas.html",
-                           motor=motor,
-                           consulta=consulta,
-                           columnas=columnas,
-                           resultados=resultados,
-                           mensaje=mensaje,
-                           tablas=tablas,
-                           vistas=vistas,
-                           funciones=funciones)
+    return render_template(
+        'consultas.html',
+        motor=motor,
+        tablas=tablas,
+        vistas=vistas,
+        funciones=funciones,
+        resultados=resultados,
+        columnas=columnas,
+        mensaje=mensaje,
+        consulta=consulta
+    )
 
 
 
