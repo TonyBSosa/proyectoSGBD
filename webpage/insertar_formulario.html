@@ -91,17 +91,18 @@
             {% endif %}
 
             <form method="POST" class="mb-4">
-                <div class="row g-3">
-                    {% for columna in columnas %}
-                    <div class="col-md-6">
-                        <label class="form-label" for="{{ columna }}">
-                            <i class="bi bi-columns-gap"></i> {{ columna }}
-                        </label>
-                        <input class="form-control input-highlight" type="text" 
-                               name="{{ columna }}" id="{{ columna }}" required>
-                    </div>
-                    {% endfor %}
-                </div>
+    <div class="row g-3">
+    {% for columna in columnas %}
+    <div class="col-md-6">
+        <label class="form-label" for="{{ columna }}">
+            <i class="bi bi-columns-gap"></i> {{ columna }}
+        </label>
+        <input class="form-control input-highlight" type="text" 
+               name="{{ columna }}" id="{{ columna }}"
+               {% if columna in campos_requeridos %} required {% endif %}>
+    </div>
+    {% endfor %}
+</div>
                 
                 <div class="mt-4">
                     <button class="btn btn-success" type="submit">

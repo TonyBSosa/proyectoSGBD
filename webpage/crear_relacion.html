@@ -7,6 +7,11 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body class="bg-light">
+    {% if mensaje %}
+    <div class="alert alert-info mt-3" role="alert">
+        {{ mensaje }}
+    </div>
+{% endif %}
 <div class="container py-5">
     <h1 class="mb-4">🔗 Crear Relación entre Tablas</h1>
 
@@ -60,13 +65,46 @@
         </div>
 
         <button type="submit" class="btn btn-primary">✅ Crear Relación</button>
-                     <a href="{{ url_for('ver_metadata', motor=motor) }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left"></i> Volver
+        <a href="{{ url_for('ver_metadata', motor=motor) }}" class="btn btn-outline-secondary ms-2">⬅ Volver</a>
     </form>
+
+    <hr>
+    <h4 class="mt-5">🔍 Vista previa de la relación</h4>
+    <div class="d-flex justify-content-around align-items-center" id="vista-previa" style="min-height: 120px;">
+        <div id="tabla-pk" class="text-center p-3 border rounded bg-white shadow-sm" style="min-width: 200px;">
+            <h5>Tabla PK</h5>
+            <div id="nombre-tabla-pk" class="fw-bold text-primary"></div>
+            <div id="campo-pk" class="text-muted"></div>
+        </div>
+        <div class="mx-3">
+            <span class="display-5 text-success">➡️</span>
+            <div class="text-center">Relación</div>
+        </div>
+        <div id="tabla-fk" class="text-center p-3 border rounded bg-white shadow-sm" style="min-width: 200px;">
+            <h5>Tabla FK</h5>
+            <div id="nombre-tabla-fk" class="fw-bold text-danger"></div>
+            <div id="campo-fk" class="text-muted"></div>
+        </div>
+    </div>
 </div>
 
 <script>
 $(document).ready(function () {
+    function actualizarVistaPrevia() {
+        const tablaPk = $('#tabla_principal').val();
+        const campoPk = $('#campo_pk').val();
+        const tablaFk = $('#tabla_secundaria').val();
+        const campoFk = $('#campo_fk').val();
+
+        $('#nombre-tabla-pk').text(tablaPk || '...');
+        $('#campo-pk').text(campoPk || '');
+
+        $('#nombre-tabla-fk').text(tablaFk || '...');
+        $('#campo-fk').text(campoFk || '');
+    }
+
+    $('#tabla_principal, #campo_pk, #tabla_secundaria, #campo_fk').on('change', actualizarVistaPrevia);
+
     $('#tabla_principal').change(function () {
         const tabla = $(this).val();
         if (tabla) {
@@ -76,6 +114,7 @@ $(document).ready(function () {
                     opciones += `<option value="${campo}">${campo}</option>`;
                 });
                 $('#campo_pk').html(opciones);
+                actualizarVistaPrevia();
             });
         }
     });
@@ -89,6 +128,7 @@ $(document).ready(function () {
                     opciones += `<option value="${campo}">${campo}</option>`;
                 });
                 $('#campo_fk').html(opciones);
+                actualizarVistaPrevia();
             });
         }
     });
