@@ -492,67 +492,74 @@ def consultas(motor):
     conn = conectar_mysql() if motor == 'mysql' else conectar_sqlserver()
     cursor = conn.cursor()
 
-    tablas = []
-    vistas = []
-    funciones = []
+    consulta = ''
     resultados = []
     columnas = []
     mensaje = ''
-    consulta = ''
+    base = session.get('base_datos', 'test_sgbd')
 
+    # Obtener tablas
     try:
-        # Obtener tablas
         if motor == 'mysql':
             cursor.execute("SHOW TABLES")
             tablas = [fila[0] for fila in cursor.fetchall()]
         else:
             cursor.execute("SELECT name FROM sys.tables")
             tablas = [fila[0] for fila in cursor.fetchall()]
+    except Exception as e:
+        return f"<h1>Error obteniendo tablas</h1><p>{e}</p>"
 
-        # Obtener vistas
+    # Obtener vistas y funciones
+    vistas, funciones = [], []
+    try:
         if motor == 'mysql':
-            cursor.execute("SHOW FULL TABLES WHERE Table_type = 'VIEW'")
+            cursor.execute(f"SELECT table_name FROM information_schema.views WHERE table_schema = '{base}'")
             vistas = [fila[0] for fila in cursor.fetchall()]
+
+            cursor.execute("SHOW FUNCTION STATUS WHERE Db = %s", (base,))
+            funciones = [fila[1] for fila in cursor.fetchall()]
         else:
             cursor.execute("SELECT name FROM sys.views")
             vistas = [fila[0] for fila in cursor.fetchall()]
 
-        # Obtener funciones escalares (sin parámetros visibles)
-        if motor == 'mysql':
-            cursor.execute("SELECT routine_name FROM information_schema.routines WHERE routine_type='FUNCTION' AND routine_schema=DATABASE()")
-            funciones = [f"{fila[0]}()" for fila in cursor.fetchall()]
-        else:
-            cursor.execute("SELECT name FROM sys.objects WHERE type = 'FN'")
-            funciones = [f"{fila[0]}()" for fila in cursor.fetchall()]
+            cursor.execute("""
+                SELECT name 
+                FROM sys.objects 
+                WHERE type IN ('FN', 'IF', 'TF')
+            """)
+            funciones = [fila[0] for fila in cursor.fetchall()]
+    except Exception as e:
+        mensaje = f"❌ Error cargando vistas o funciones: {e}"
 
-        # Si viene una consulta por POST
-        if request.method == 'POST':
-            consulta = request.form.get('consulta', '').strip()
+    # Ejecutar consulta si se envió
+    if request.method == 'POST':
+        consulta = request.form['consulta']
+        try:
+            cursor.execute(consulta)
 
-            if consulta:
-                try:
-                    cursor.execute(consulta)
-                    if cursor.description:
-                        columnas = [col[0] for col in cursor.description]
-                        resultados = cursor.fetchall()
-                    mensaje = "✅ Consulta ejecutada correctamente"
-                except Exception as e:
-                    mensaje = f"❌ Error: {e}"
-    finally:
-        conn.close()
+            tipo = consulta.strip().split()[0].lower()
+            if tipo == 'select':
+                resultados = cursor.fetchall()
+                columnas = [desc[0] for desc in cursor.description]
+            elif tipo in ('insert', 'update', 'delete', 'alter', 'drop', 'create', 'truncate'):
+                conn.commit()
+                mensaje = "✅ Consulta ejecutada correctamente"
+            else:
+                mensaje = "✅ Consulta ejecutada (sin resultados)"
+        except Exception as e:
+            mensaje = f"❌ Error: {e}"
 
-    return render_template(
-        'consultas.html',
-        motor=motor,
-        tablas=tablas,
-        vistas=vistas,
-        funciones=funciones,
-        resultados=resultados,
-        columnas=columnas,
-        mensaje=mensaje,
-        consulta=consulta
-    )
+    conn.close()
 
+    return render_template('consultas.html',
+                           motor=motor,
+                           consulta=consulta,
+                           tablas=tablas,
+                           vistas=vistas,
+                           funciones=funciones,
+                           resultados=resultados,
+                           columnas=columnas,
+                           mensaje=mensaje)
 
 
  # Iniciar servidor
